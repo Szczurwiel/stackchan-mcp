@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install PlatformIO
+      - name: Install PlatformIO and esptool
         run: |
           python -m pip install --upgrade pip
-          pip install platformio
+          pip install platformio esptool
 
       - name: Prepare Config
         working-directory: ./firmware
@@ -35,11 +35,43 @@ jobs:
           pio run -e m5stack-cores3
           pio run -e m5stack-cores3 --target buildfs
 
-      - name: Upload Binaries Artifacts
+      - name: Merge all binaries into a single file
+        working-directory: ./firmware
+        run: |
+          BOOTLOADER=$(find .pio/build/m5stack-cores3 -name "bootloader.bin" | head -n 1)
+          PARTITIONS=$(find .pio/build/m5stack-cores3 -name "partitions.bin" | head -n 1)
+          FIRMWARE=$(find .pio/build/m5stack-cores3 -name "firmware.bin" | head -n 1)
+          LITTLEFS=$(find .pio/build/m5stack-cores3 -name "littlefs.bin" | head -n 1)
+          if [ -z "$LITTLEFS" ]; then
+            LITTLEFS=$(find .pio/build/m5stack-cores3 -name "spiffs.bin" | head -n 1)
+          fi
+          
+          # Skrypt odczytujący adres pamięci dla buziek prosto ze zbudowanej tabeli partycji
+          cat << 'EOF' > get_offset.py
+          import sys, struct
+          with open(sys.argv[1], "rb") as f: data = f.read()
+          for i in range(0, len(data), 32):
+              if data[i:i+2] != b'\x50\xaa': continue
+              label = data[i+12:i+28].rstrip(b'\x00').decode('ascii', errors='ignore')
+              if label in ('spiffs', 'littlefs', 'vfs', 'fs'):
+                  offset = struct.unpack('<I', data[i+4:i+8])[0]
+                  print(hex(offset))
+                  sys.exit(0)
+          print("0x000000")
+          EOF
+          
+          FS_OFFSET=$(python get_offset.py $PARTITIONS)
+          echo "Znalazłem adres systemu plików: $FS_OFFSET"
+          
+          # Magia: łączenie wszystkich 4 plików w 1 za pomocą esptool
+          esptool.py --chip esp32s3 merge_bin -o FULL_STACKCHAN.bin \
+            0x0 $BOOTLOADER \
+            0x8000 $PARTITIONS \
+            0x10000 $FIRMWARE \
+            $FS_OFFSET $LITTLEFS
+
+      - name: Upload Unified Binary
         uses: actions/upload-artifact@v4
         with:
-          name: stackchan-firmware-binaries
-          path: |
-            firmware/.pio/build/**/firmware.bin
-            firmware/.pio/build/**/spiffs.bin
-            firmware/.pio/build/**/littlefs.bin
+          name: gotowy-plik-do-wgrania
+          path: firmware/FULL_STACKCHAN.bin
