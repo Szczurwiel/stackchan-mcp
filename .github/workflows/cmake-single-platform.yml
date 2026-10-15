@@ -23,7 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
 
+      - name: Prepare Config
+        working-directory: ./firmware
+        run: |
+          if [ -f config.h.example ]; then cp config.h.example src/config.h; fi
+          if [ -f src/config.h.example ]; then cp src/config.h.example src/config.h; fi
+
       - name: Build Firmware and Filesystem Image
+        working-directory: ./firmware
         run: |
           pio run
           pio run --target buildfs
@@ -33,6 +40,6 @@ jobs:
         with:
           name: stackchan-firmware-binaries
           path: |
-            .pio/build/**/firmware.bin
-            .pio/build/**/spiffs.bin
-            .pio/build/**/littlefs.bin
+            firmware/.pio/build/**/firmware.bin
+            firmware/.pio/build/**/spiffs.bin
+            firmware/.pio/build/**/littlefs.bin
