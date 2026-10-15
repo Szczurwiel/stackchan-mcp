@@ -35,12 +35,18 @@ jobs:
           pio run -e m5stack-cores3
           pio run -e m5stack-cores3 --target buildfs
 
-      - name: Upload Binaries Artifacts
+      - name: Zbierz pliki do jednego folderu
+        working-directory: ./firmware
+        run: |
+          mkdir -p GOTOWE_PLIKI
+          cp .pio/build/m5stack-cores3/bootloader.bin GOTOWE_PLIKI/
+          cp .pio/build/m5stack-cores3/partitions.bin GOTOWE_PLIKI/
+          cp .pio/build/m5stack-cores3/firmware.bin GOTOWE_PLIKI/
+          cp .pio/build/m5stack-cores3/spiffs.bin GOTOWE_PLIKI/ || true
+          cp .pio/build/m5stack-cores3/littlefs.bin GOTOWE_PLIKI/ || true
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stackchan-firmware-binaries
-          path: |
-            firmware/.pio/build/**/firmware.bin
-            firmware/.pio/build/**/spiffs.bin
-            firmware/.pio/build/**/partitions.bin
-            firmware/.pio/build/**/bootloader.bin
+          name: paczka-stackchan
+          path: firmware/GOTOWE_PLIKI/
